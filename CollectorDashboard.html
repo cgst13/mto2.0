@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer List</title>
+    <style>
+        body { font-family: 'Arial', sans-serif; margin: 0; padding: 0; background-color: #f5f7fa; color: #333; }
+        header { background: #003366; color: white; padding: 30px 0; text-align: center; font-size: 28px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); }
+        .container { max-width: 1200px; margin: 40px auto; padding: 30px; background-color: white; box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1); border-radius: 8px; }
+        .search-box { margin-bottom: 20px; text-align: right; }
+        .search-box input { padding: 12px 20px; font-size: 16px; border: 1px solid #007bff; border-radius: 4px; width: 300px; }
+        .search-box input:focus { outline: none; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 15px; text-align: left; font-size: 16px; border-bottom: 1px solid #ddd; white-space: nowrap; }
+        th { background-color: #003366; color: white; font-weight: bold; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        td button { background-color: #28a745; color: white; border: none; padding: 10px 20px; font-size: 14px; border-radius: 4px; cursor: pointer; }
+        td button:hover { background-color: #218838; }
+        .pagination { display: flex; justify-content: flex-end; margin-top: 20px; }
+        .pagination button { padding: 12px 20px; border: 1px solid #007bff; background-color: white; color: #007bff; font-size: 16px; border-radius: 4px; margin-left: 10px; cursor: pointer; }
+        .pagination button:hover { background-color: #f1f1f1; }
+        footer { background-color: #003366; color: white; text-align: center; padding: 20px; font-size: 14px; margin-top: 40px; }
+
+        /* Modal Styles */
+        .modal { display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); padding-top: 50px; }
+        .modal-content { background-color: white; margin: 5% auto; padding: 20px; width: 80%; max-width: 800px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); }
+        .modal-header { font-size: 22px; font-weight: bold; }
+        .modal-close { color: #aaa; float: right; font-size: 24px; font-weight: bold; cursor: pointer; }
+        .modal-close:hover, .modal-close:focus { color: black; text-decoration: none; }
+        .customer-details p { margin: 5px 0; font-size: 16px; line-height: 1.5; }
+        .bill-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .bill-table th, .bill-table td { padding: 10px 15px; font-size: 14px; border-bottom: 1px solid #ddd; white-space: nowrap; }
+        .bill-table th { background-color: #003366; color: white; }
+        .bill-table tr:nth-child(even) { background-color: #f9f9f9; }
+    </style>
+</head>
+<body>
+
+<header>
+    Customer List - Government Records
+</header>
+
+<div class="container">
+    <div class="search-box">
+        <input type="text" id="searchInput" placeholder="Search customers..." oninput="filterTable()" />
+    </div>
+
+    <table id="customerTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Barangay</th>
+                <th>Discount</th>
+                <th>Remarks</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Dynamic data will be inserted here -->
+        </tbody>
+    </table>
+
+    <div class="pagination" id="pagination">
+        <!-- Pagination buttons will be inserted here -->
+    </div>
+</div>
+
+<footer>
+    &copy; 2025 Government of the Philippines | All Rights Reserved
+</footer>
+
+<!-- Modal -->
+<div id="customerModal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeModal()">&times;</span>
+        <div id="customerDetails" class="customer-details">
+            <!-- Customer Details will be dynamically inserted here -->
+        </div>
+        <h3>Bills</h3>
+        <table id="billTable" class="bill-table">
+            <thead>
+                <tr>
+                    <th>OR Number</th>
+                    <th>Month</th>
+                    <th>Previous</th>
+                    <th>Current</th>
+                    <th>Cubics</th>
+                    <th>Amount</th>
+                    <th>Surcharge</th> <!-- New Surcharge Column -->
+                    <th>Total Amount</th> <!-- New Total Amount Column -->
+                    <th>Due Date</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Bill data will be inserted here -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const sheetID = '15C-U6awpjkHvfLJJWf6FoZG2brJ6P36bFAL3LRd5B00';
+    const apiKey = 'AIzaSyCrQ6xMHw271fTIbhWG2xjAzBy8ccXo5wU';
+    const rowsPerPage = 15;
+    let currentPage = 1;
+    let totalPages = 1;
+    let customersData = [];
+    let filteredData = [];
+
+    function fetchCustomerData() {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetID}/values/Customers?key=${apiKey}`;
+
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.values) {
+                    customersData = data.values.slice(1); // Skip header row
+                    filteredData = [...customersData]; // Initialize filtered data with all customers
+                    totalPages = Math.ceil(filteredData.length / rowsPerPage);
+                    displayTable(currentPage);
+                    generatePagination();
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching customer data:', error);
+            });
+    }
+
+    function displayTable(page) {
+        const start = (page - 1) * rowsPerPage;
+        const end = start + rowsPerPage;
+        const customersToDisplay = filteredData.slice(start, end);
+
+        const tableBody = document.getElementById('customerTable').getElementsByTagName('tbody')[0];
+        tableBody.innerHTML = ''; // Clear previous rows
+
+        customersToDisplay.forEach(customer => {
+            const row = tableBody.insertRow();
+            row.innerHTML = `
+                <td>${customer[0]}</td>
+                <td>${customer[1]}</td>
+                <td>${customer[2]}</td>
+                <td>${customer[3]}</td>
+                <td>${customer[4]}</td>
+                <td>${customer[5]}</td>
+                <td><button onclick="openModal('${customer[0]}')">Pay Bill</button></td>
+            `;
+        });
+    }
+
+    function generatePagination() {
+        const paginationDiv = document.getElementById('pagination');
+        paginationDiv.innerHTML = ''; // Clear previous pagination
+
+        const prevButton = document.createElement('button');
+        prevButton.textContent = 'Previous Page';
+        prevButton.disabled = currentPage === 1;
+        prevButton.onclick = () => {
+            if (currentPage > 1) {
+                currentPage--;
+                displayTable(currentPage);
+                generatePagination();
+            }
+        };
+
+        const nextButton = document.createElement('button');
+        nextButton.textContent = 'Next Page';
+        nextButton.disabled = currentPage === totalPages;
+        nextButton.onclick = () => {
+            if (currentPage < totalPages) {
+                currentPage++;
+                displayTable(currentPage);
+                generatePagination();
+            }
+        };
+
+        paginationDiv.appendChild(prevButton);
+        paginationDiv.appendChild(nextButton);
+    }
+
+    function openModal(customerID) {
+        const customer = customersData.find(c => c[0] === customerID);
+        if (customer) {
+            document.getElementById('customerDetails').innerHTML = `
+                <p><strong>ID:</strong> ${customer[0]}</p>
+                <p><strong>Name:</strong> ${customer[1]}</p>
+                <p><strong>Type:</strong> ${customer[2]}</p>
+                <p><strong>Barangay:</strong> ${customer[3]}</p>
+                <p><strong>Discount:</strong> ${customer[4]}</p>
+                <p><strong>Remarks:</strong> ${customer[5]}</p>
+            `;
+            fetchBillingData(customerID);
+            document.getElementById('customerModal').style.display = 'block';
+        }
+    }
+
+    function closeModal() {
+        document.getElementById('customerModal').style.display = 'none';
+    }
+
+    function fetchBillingData(customerID) {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetID}/values/BillingData?key=${apiKey}`;
+
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                const billData = data.values.filter(bill => bill[1] === customerID);
+                displayBillingData(billData);
+            })
+            .catch(error => {
+                console.error('Error fetching billing data:', error);
+            });
+    }
+
+    function formatMonth(monthValue) {
+        const date = new Date(monthValue);
+        const options = { year: 'numeric', month: 'long' }; // Format as "Month Year"
+        return date.toLocaleDateString('en-US', options); // e.g. "April 2025"
+    }
+
+    function formatDueDate(dueDateValue) {
+        const date = new Date(dueDateValue);
+        const month = (date.getMonth() + 1).toString().padStart(2, '0'); // Get month (0-11), add 1, and pad to 2 digits
+        const day = date.getDate().toString().padStart(2, '0'); // Get day, pad to 2 digits
+        const year = date.getFullYear(); // Get year
+
+        return `${month}-${day}-${year}`; // Return formatted date as mm-dd-yyyy
+    }
+
+    // Function to calculate the surcharge and total amount
+    function calculateSurchargeAndTotal(amount, dueDateValue) {
+        const currentDate = new Date();
+        const dueDate = new Date(dueDateValue);
+        const endOfMonth = new Date(dueDate.getFullYear(), dueDate.getMonth() + 1, 0); // Get the end of the month of the due date
+
+        let surcharge = 0;
+        let totalAmount = amount;
+
+        // If current date is past the Due Date, apply 10% surcharge
+        if (currentDate > dueDate) {
+            surcharge = amount * 0.10; // 10% surcharge for past due date
+            totalAmount += surcharge; // Add surcharge to total amount
+        }
+
+        // If current date is past the end of the Due Date month, apply an additional 5% surcharge
+        if (currentDate > endOfMonth) {
+            surcharge += (amount + amount * 0.10) * 0.05; // Additional 5% surcharge for past the end of the month
+            totalAmount += (amount + amount * 0.10) * 0.05; // Add additional surcharge to total amount
+        }
+
+        return { surcharge, totalAmount };
+    }
+
+    // Function to display the billing data with Surcharge and Total Amount
+    function displayBillingData(bills) {
+        const billTableBody = document.getElementById('billTable').getElementsByTagName('tbody')[0];
+        billTableBody.innerHTML = ''; // Clear previous bill data
+
+        bills.forEach(bill => {
+            const amount = parseFloat(bill[7]); // Amount column is at index 7 (column 8)
+            const dueDate = bill[8]; // Due Date column is at index 8 (column 9)
+
+            const { surcharge, totalAmount } = calculateSurchargeAndTotal(amount, dueDate); // Calculate surcharge and total amount
+
+            const row = billTableBody.insertRow();
+            row.innerHTML = `
+                <td>${bill[0]}</td>
+                <td>${formatMonth(bill[3])}</td> <!-- Format the Month column -->
+                <td>${bill[4]}</td>
+                <td>${bill[5]}</td>
+                <td>${bill[6]}</td>
+                <td>${amount}</td>
+                <td>${surcharge.toFixed(2)}</td> <!-- Surcharge column -->
+                <td>${totalAmount.toFixed(2)}</td> <!-- Total Amount column -->
+                <td>${formatDueDate(bill[8])}</td> <!-- Format the Due Date column -->
+                <td>${bill[9]}</td> <!-- Status column -->
+            `;
+        });
+    }
+
+    window.onload = fetchCustomerData;
+</script>
+
+</body>
+</html>
