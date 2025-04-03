@@ -95,23 +95,27 @@
 
             <h3>Billing History</h3>
 
-            <div id="filters">
-                <label for="monthFilter">Month:</label>
-                <select id="monthFilter" onchange="filterTable()">
-                    <option value="">All</option> <!-- Default option -->
-                    <!-- Dynamic month options will be added here -->
-                </select>
-            
-                <label for="statusFilter">Status:</label>
-                <select id="statusFilter" onchange="filterTable()">
-                    <option value="">All</option> <!-- Default option -->
-                    <!-- Dynamic status options will be added here -->
-                </select>
-            </div>
+<!-- Add dynamic options for Month and Status Filters -->
+<div id="filters">
+    <label for="monthFilter">Month:</label>
+    <select id="monthFilter" onchange="filterTable()">
+        <option value="">All</option> <!-- Default option -->
+        <!-- Dynamic month options will be added here -->
+    </select>
+
+<label for="statusFilter">Status:</label>
+<select id="statusFilter" onchange="filterTable()">
+    <option value="">All</option>
+    <option value="Pending" selected>Pending</option> <!-- Default value set to "Pending" -->
+    <option value="Paid">Paid</option>
+</select>
+</div>
+
 <div class="table-container">
     <table id="billTable">
         <thead>
             <tr>
+                <th>Select</th>
                 <th>OR #</th>
                 <th>Month</th>
                 <th>Prev</th>
@@ -128,6 +132,11 @@
     </table>
 </div>
 
+<div id="totalSelectedAmount">Total Amount: ₱0.00</div>
+<div id="totalSelectedSurcharge">Total Surcharge: ₱0.00</div>
+<div id="totalSelectedColumn">Total Column (Amount + Surcharge): ₱0.00</div>
+
+<button id="paySelectedBills" onclick="paySelectedBills()" disabled>Pay Selected Bills</button>
 
 
         </div>
@@ -245,19 +254,63 @@ function adjustModalSize() {
 }
 
 
-    function fetchBillingData(customerID) {
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetID}/values/BillingData?key=${apiKey}`;
+let billingData = [];  // To store billing data fetched from Google Sheets
 
-        fetch(url)
-            .then(response => response.json())
-            .then(data => {
-                const billData = data.values.filter(bill => bill[1] === customerID);
-                displayBillingData(billData);
-            })
-            .catch(error => {
-                console.error('Error fetching billing data:', error);
-            });
-    }
+function fetchBillingData(customerID) {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetID}/values/BillingData?key=${apiKey}`;
+
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            billingData = data.values.filter(bill => bill[1] === customerID); // Filter by Customer ID
+            populateFilters(billingData);  // Populate the filters with options
+            displayBillingData(billingData);  // Display filtered billing data
+        })
+        .catch(error => {
+            console.error('Error fetching billing data:', error);
+        });
+}
+
+function populateFilters(bills) {
+    const monthFilter = document.getElementById('monthFilter');
+    const statusFilter = document.getElementById('statusFilter');
+
+    // Populate Month filter with unique months
+    const months = [...new Set(bills.map(bill => formatMonth(bill[3])))];
+    months.forEach(month => {
+        const option = document.createElement('option');
+        option.value = month;
+        option.textContent = month;
+        monthFilter.appendChild(option);
+    });
+
+    // Populate Status filter with unique statuses
+    const statuses = [...new Set(bills.map(bill => bill[9]))];  // Column 9 contains Status
+    statuses.forEach(status => {
+        const option = document.createElement('option');
+        option.value = status;
+        option.textContent = status;
+        statusFilter.appendChild(option);
+    });
+}
+
+function filterTable() {
+    const selectedMonth = document.getElementById('monthFilter').value;
+    const selectedStatus = document.getElementById('statusFilter').value;
+
+    // Filter bills by selected month and status
+    const filteredBills = billingData.filter(bill => {
+        const billMonth = formatMonth(bill[3]); // Get formatted month
+        const billStatus = bill[9];  // Get status from column 9
+
+        const isMonthMatch = selectedMonth ? billMonth === selectedMonth : true;
+        const isStatusMatch = selectedStatus ? billStatus === selectedStatus : true;
+
+        return isMonthMatch && isStatusMatch;
+    });
+
+    displayBillingData(filteredBills);  // Display filtered data
+}
 
     function formatMonth(monthValue) {
         const date = new Date(monthValue);
@@ -298,9 +351,7 @@ function adjustModalSize() {
         return { surcharge, totalAmount };
     }
 
-    // Function to display the billing data with Surcharge and Total Amount
-// Function to display the billing data with Surcharge and Total Amount
-function displayBillingData(bills) {
+    function displayBillingData(bills) {
     const billTableBody = document.getElementById('billTable').getElementsByTagName('tbody')[0];
     billTableBody.innerHTML = ''; // Clear previous bill data
 
@@ -311,6 +362,7 @@ function displayBillingData(bills) {
     bills.forEach(bill => {
         const amount = parseFloat(bill[7]); // Amount column is at index 7 (column 8)
         const dueDate = bill[8]; // Due Date column is at index 8 (column 9)
+        const status = bill[9]; // Status column is at index 9
 
         const { surcharge, totalAmount: calculatedTotalAmount } = calculateSurchargeAndTotal(amount, dueDate); // Calculate surcharge and total amount
 
@@ -319,7 +371,15 @@ function displayBillingData(bills) {
         totalAmountWithSurcharge += calculatedTotalAmount; // Sum the Total Amount column
 
         const row = billTableBody.insertRow();
+        
+        // Check if the status is "Pending" before rendering the checkbox
+        let checkboxHTML = '';
+        if (status === 'Pending') {
+            checkboxHTML = `<input type="checkbox" class="bill-checkbox" data-bill-id="${bill[0]}" data-amount="${amount}" data-surcharge="${surcharge.toFixed(2)}" data-total="${calculatedTotalAmount.toFixed(2)}" onchange="updateSelectedBills()">`;
+        }
+        
         row.innerHTML = `
+            <td>${checkboxHTML}</td> <!-- Checkbox column -->
             <td>${bill[0]}</td>
             <td>${formatMonth(bill[3])}</td> <!-- Format the Month column -->
             <td>${bill[4]}</td>
@@ -329,7 +389,7 @@ function displayBillingData(bills) {
             <td>${surcharge.toFixed(2)}</td> <!-- Surcharge column -->
             <td>${calculatedTotalAmount.toFixed(2)}</td> <!-- Total Amount column -->
             <td>${formatDueDate(bill[8])}</td> <!-- Format the Due Date column -->
-            <td>${bill[9]}</td> <!-- Status column -->
+            <td>${status}</td> <!-- Status column -->
         `;
     });
 
@@ -345,6 +405,79 @@ function displayBillingData(bills) {
 }
 
 
+
+let selectedBills = []; // Array to hold selected bills
+
+function updateSelectedBills() {
+    // Clear selected bills array before repopulating it
+    selectedBills = [];
+    
+    // Get all checkboxes in the table
+    const checkboxes = document.querySelectorAll('.bill-checkbox');
+    
+    // Loop through all checkboxes and check if they are checked
+    checkboxes.forEach(checkbox => {
+        if (checkbox.checked) {
+            const billId = checkbox.getAttribute('data-bill-id');
+            const amount = parseFloat(checkbox.getAttribute('data-amount'));
+            const surcharge = parseFloat(checkbox.getAttribute('data-surcharge'));
+            const total = parseFloat(checkbox.getAttribute('data-total')); // Get the Total value
+            selectedBills.push({ billId, amount, surcharge, total });
+        }
+    });
+
+    // Update the total payment button (if needed)
+    updateTotalAmount();
+}
+
+
+
+function updateTotalAmount() {
+    const totalAmount = selectedBills.reduce((total, bill) => total + bill.amount, 0);
+    const totalSurcharge = selectedBills.reduce((total, bill) => total + bill.surcharge, 0);
+    const totalColumn = selectedBills.reduce((total, bill) => total + bill.total, 0); // Calculate the Total column
+
+    // Update the total amount display
+    const totalAmountElement = document.getElementById('totalSelectedAmount');
+    const totalSurchargeElement = document.getElementById('totalSelectedSurcharge');
+    const totalColumnElement = document.getElementById('totalSelectedColumn');
+    
+    if (totalAmountElement) {
+        totalAmountElement.textContent = `Total Amount: ₱${totalAmount.toFixed(2)}`;
+    }
+    
+    if (totalSurchargeElement) {
+        totalSurchargeElement.textContent = `Total Surcharge: ₱${totalSurcharge.toFixed(2)}`;
+    }
+
+    if (totalColumnElement) {
+        totalColumnElement.textContent = `Total Column (Amount + Surcharge): ₱${totalColumn.toFixed(2)}`;
+    }
+
+    // Enable the payment button if any bills are selected
+    document.getElementById('paySelectedBills').disabled = selectedBills.length === 0;
+}
+
+
+
+function paySelectedBills() {
+    if (selectedBills.length === 0) {
+        alert('Please select at least one bill to pay.');
+        return;
+    }
+
+    // For now, just show an alert with the selected bills
+    alert('Proceeding with payment for the following bills:\n' + 
+          selectedBills.map(bill => `Bill ID: ${bill.billId}, Amount: ₱${bill.amount.toFixed(2)}`).join('\n'));
+
+    // Reset the selected bills
+    selectedBills = [];
+    updateTotalAmount();
+
+    // Optionally, you could disable the checkboxes or reset them
+    document.querySelectorAll('.bill-checkbox').forEach(checkbox => checkbox.checked = false);
+    document.getElementById('paySelectedBills').disabled = true;
+}
 
 
 
