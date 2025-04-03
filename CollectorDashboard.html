@@ -23,16 +23,28 @@
         footer { background-color: #003366; color: white; text-align: center; padding: 20px; font-size: 14px; margin-top: 40px; }
 
         /* Modal Styles */
-        .modal { display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); padding-top: 50px; }
-        .modal-content { background-color: white; margin: 5% auto; padding: 20px; width: 80%; max-width: 800px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); }
-        .modal-header { font-size: 22px; font-weight: bold; }
-        .modal-close { color: #aaa; float: right; font-size: 24px; font-weight: bold; cursor: pointer; }
-        .modal-close:hover, .modal-close:focus { color: black; text-decoration: none; }
-        .customer-details p { margin: 5px 0; font-size: 16px; line-height: 1.5; }
-        .bill-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        .bill-table th, .bill-table td { padding: 10px 15px; font-size: 14px; border-bottom: 1px solid #ddd; white-space: nowrap; }
-        .bill-table th { background-color: #003366; color: white; }
-        .bill-table tr:nth-child(even) { background-color: #f9f9f9; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.4); overflow: auto; padding: 20px; }
+.modal-content { background: white; margin: auto; padding: 20px; width: 90%; max-width: 800px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); transition: transform 0.2s ease-out; }
+.modal-body { padding: 15px; font-size: 16px; }
+.modal-close { float: right; font-size: 22px; cursor: pointer; color: #666; }
+.modal-close:hover { color: #000; }
+.table-container { max-height: 50vh; overflow-y: auto; }
+#billTable { width: 100%; border-collapse: collapse; }
+#billTable th, #billTable td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; font-size: 14px; }
+#billTable th { background: #003366; color: white; font-weight: bold; }
+#billTable tr:nth-child(even) { background: #f9f9f9; }
+@media (max-width: 768px) { .modal-content { width: 95%; padding: 15px; } }
+
+
+.filter-container { display: flex; justify-content: space-between; margin-bottom: 20px; }
+.filter-container label { font-size: 14px; font-weight: bold; margin-right: 10px; }
+.filter-container select { padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; background-color: white; }
+.filter-container select:focus { outline: none; border-color: #007bff; }
+.filter-container .filter-button { padding: 8px 12px; background-color: #007bff; color: white; font-size: 14px; border: none; border-radius: 4px; cursor: pointer; }
+.filter-container .filter-button:hover { background-color: #0056b3; }
+
+
+
     </style>
 </head>
 <body>
@@ -73,34 +85,55 @@
 </footer>
 
 <!-- Modal -->
+<!-- Minimalist Modal -->
 <div id="customerModal" class="modal">
     <div class="modal-content">
         <span class="modal-close" onclick="closeModal()">&times;</span>
-        <div id="customerDetails" class="customer-details">
-            <!-- Customer Details will be dynamically inserted here -->
+        <div class="modal-body">
+            <h2>Customer Details</h2>
+            <div id="customerDetails"></div>
+
+            <h3>Billing History</h3>
+
+            <div id="filters">
+                <label for="monthFilter">Month:</label>
+                <select id="monthFilter" onchange="filterTable()">
+                    <option value="">All</option> <!-- Default option -->
+                    <!-- Dynamic month options will be added here -->
+                </select>
+            
+                <label for="statusFilter">Status:</label>
+                <select id="statusFilter" onchange="filterTable()">
+                    <option value="">All</option> <!-- Default option -->
+                    <!-- Dynamic status options will be added here -->
+                </select>
+            </div>
+<div class="table-container">
+    <table id="billTable">
+        <thead>
+            <tr>
+                <th>OR #</th>
+                <th>Month</th>
+                <th>Prev</th>
+                <th>Current</th>
+                <th>Usage</th>
+                <th>Amount</th>
+                <th>Surcharge</th>
+                <th>Total</th>
+                <th>Due</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+
+
         </div>
-        <h3>Bills</h3>
-        <table id="billTable" class="bill-table">
-            <thead>
-                <tr>
-                    <th>OR Number</th>
-                    <th>Month</th>
-                    <th>Previous</th>
-                    <th>Current</th>
-                    <th>Cubics</th>
-                    <th>Amount</th>
-                    <th>Surcharge</th> <!-- New Surcharge Column -->
-                    <th>Total Amount</th> <!-- New Total Amount Column -->
-                    <th>Due Date</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- Bill data will be inserted here -->
-            </tbody>
-        </table>
     </div>
 </div>
+
 
 <script>
     const sheetID = '15C-U6awpjkHvfLJJWf6FoZG2brJ6P36bFAL3LRd5B00';
@@ -183,24 +216,34 @@
     }
 
     function openModal(customerID) {
-        const customer = customersData.find(c => c[0] === customerID);
-        if (customer) {
-            document.getElementById('customerDetails').innerHTML = `
-                <p><strong>ID:</strong> ${customer[0]}</p>
-                <p><strong>Name:</strong> ${customer[1]}</p>
-                <p><strong>Type:</strong> ${customer[2]}</p>
-                <p><strong>Barangay:</strong> ${customer[3]}</p>
-                <p><strong>Discount:</strong> ${customer[4]}</p>
-                <p><strong>Remarks:</strong> ${customer[5]}</p>
-            `;
-            fetchBillingData(customerID);
-            document.getElementById('customerModal').style.display = 'block';
-        }
-    }
+    const customer = customersData.find(c => c[0] === customerID);
+    if (customer) {
+        document.getElementById('customerDetails').innerHTML = `
+            <p><strong>ID:</strong> ${customer[0]} | <strong>Name:</strong> ${customer[1]} | 
+            <strong>Type:</strong> ${customer[2]} | <strong>Barangay:</strong> ${customer[3]} | 
+            <strong>Discount:</strong> ${customer[4]}</p>
+        `;
 
-    function closeModal() {
-        document.getElementById('customerModal').style.display = 'none';
+        fetchBillingData(customerID);
+
+        const modal = document.getElementById('customerModal');
+        modal.style.display = 'block';
+
+        // Wait for content to load, then auto-adjust modal
+        setTimeout(() => adjustModalSize(), 100);
     }
+}
+
+
+function closeModal() {
+    document.getElementById('customerModal').style.display = 'none';
+}
+
+function adjustModalSize() {
+    const modalContent = document.querySelector('.modal-content');
+    modalContent.style.maxHeight = window.innerHeight * 0.8 + 'px'; // Max height to 80% of screen
+}
+
 
     function fetchBillingData(customerID) {
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetID}/values/BillingData?key=${apiKey}`;
@@ -256,31 +299,55 @@
     }
 
     // Function to display the billing data with Surcharge and Total Amount
-    function displayBillingData(bills) {
-        const billTableBody = document.getElementById('billTable').getElementsByTagName('tbody')[0];
-        billTableBody.innerHTML = ''; // Clear previous bill data
+// Function to display the billing data with Surcharge and Total Amount
+function displayBillingData(bills) {
+    const billTableBody = document.getElementById('billTable').getElementsByTagName('tbody')[0];
+    billTableBody.innerHTML = ''; // Clear previous bill data
 
-        bills.forEach(bill => {
-            const amount = parseFloat(bill[7]); // Amount column is at index 7 (column 8)
-            const dueDate = bill[8]; // Due Date column is at index 8 (column 9)
+    let totalAmount = 0;
+    let totalSurcharge = 0;
+    let totalAmountWithSurcharge = 0;
 
-            const { surcharge, totalAmount } = calculateSurchargeAndTotal(amount, dueDate); // Calculate surcharge and total amount
+    bills.forEach(bill => {
+        const amount = parseFloat(bill[7]); // Amount column is at index 7 (column 8)
+        const dueDate = bill[8]; // Due Date column is at index 8 (column 9)
 
-            const row = billTableBody.insertRow();
-            row.innerHTML = `
-                <td>${bill[0]}</td>
-                <td>${formatMonth(bill[3])}</td> <!-- Format the Month column -->
-                <td>${bill[4]}</td>
-                <td>${bill[5]}</td>
-                <td>${bill[6]}</td>
-                <td>${amount}</td>
-                <td>${surcharge.toFixed(2)}</td> <!-- Surcharge column -->
-                <td>${totalAmount.toFixed(2)}</td> <!-- Total Amount column -->
-                <td>${formatDueDate(bill[8])}</td> <!-- Format the Due Date column -->
-                <td>${bill[9]}</td> <!-- Status column -->
-            `;
-        });
-    }
+        const { surcharge, totalAmount: calculatedTotalAmount } = calculateSurchargeAndTotal(amount, dueDate); // Calculate surcharge and total amount
+
+        totalAmount += amount; // Sum the Amount column
+        totalSurcharge += surcharge; // Sum the Surcharge column
+        totalAmountWithSurcharge += calculatedTotalAmount; // Sum the Total Amount column
+
+        const row = billTableBody.insertRow();
+        row.innerHTML = `
+            <td>${bill[0]}</td>
+            <td>${formatMonth(bill[3])}</td> <!-- Format the Month column -->
+            <td>${bill[4]}</td>
+            <td>${bill[5]}</td>
+            <td>${bill[6]}</td>
+            <td>${amount}</td>
+            <td>${surcharge.toFixed(2)}</td> <!-- Surcharge column -->
+            <td>${calculatedTotalAmount.toFixed(2)}</td> <!-- Total Amount column -->
+            <td>${formatDueDate(bill[8])}</td> <!-- Format the Due Date column -->
+            <td>${bill[9]}</td> <!-- Status column -->
+        `;
+    });
+
+    // Add the totals row at the bottom
+    const totalRow = billTableBody.insertRow();
+    totalRow.innerHTML = `
+        <td colspan="5"><strong>Total</strong></td>
+        <td><strong>${totalAmount.toFixed(2)}</strong></td>
+        <td><strong>${totalSurcharge.toFixed(2)}</strong></td>
+        <td><strong>${totalAmountWithSurcharge.toFixed(2)}</strong></td>
+        <td colspan="2"></td>
+    `;
+}
+
+
+
+
+
 
     window.onload = fetchCustomerData;
 </script>
