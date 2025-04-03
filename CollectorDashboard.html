@@ -106,8 +106,7 @@
 <label for="statusFilter">Status:</label>
 <select id="statusFilter" onchange="filterTable()">
     <option value="">All</option>
-    <option value="Pending" selected>Pending</option> <!-- Default value set to "Pending" -->
-    <option value="Paid">Paid</option>
+
 </select>
 </div>
 
@@ -359,7 +358,7 @@ function filterTable() {
     let totalSurcharge = 0;
     let totalAmountWithSurcharge = 0;
 
-    bills.forEach(bill => {
+    bills.forEach((bill, index) => {
         const amount = parseFloat(bill[7]); // Amount column is at index 7 (column 8)
         const dueDate = bill[8]; // Due Date column is at index 8 (column 9)
         const status = bill[9]; // Status column is at index 9
@@ -375,7 +374,7 @@ function filterTable() {
         // Check if the status is "Pending" before rendering the checkbox
         let checkboxHTML = '';
         if (status === 'Pending') {
-            checkboxHTML = `<input type="checkbox" class="bill-checkbox" data-bill-id="${bill[0]}" data-amount="${amount}" data-surcharge="${surcharge.toFixed(2)}" data-total="${calculatedTotalAmount.toFixed(2)}" onchange="updateSelectedBills()">`;
+            checkboxHTML = `<input type="checkbox" class="bill-checkbox" data-bill-id="${bill[0]}" data-amount="${amount}" data-surcharge="${surcharge.toFixed(2)}" data-total="${calculatedTotalAmount.toFixed(2)}" data-row-index="${index}" onchange="updateSelectedBills()">`;
         }
         
         row.innerHTML = `
@@ -403,6 +402,7 @@ function filterTable() {
         <td colspan="2"></td>
     `;
 }
+
 
 
 
@@ -462,22 +462,88 @@ function updateTotalAmount() {
 
 function paySelectedBills() {
     if (selectedBills.length === 0) {
-        alert('Please select at least one bill to pay.');
+        alert("Please select at least one bill to pay.");
         return;
     }
 
-    // For now, just show an alert with the selected bills
-    alert('Proceeding with payment for the following bills:\n' + 
-          selectedBills.map(bill => `Bill ID: ${bill.billId}, Amount: ₱${bill.amount.toFixed(2)}`).join('\n'));
+    // Prompt the user for the collector's name
+    const collectorName = prompt("Enter collector's name:");
 
-    // Reset the selected bills
-    selectedBills = [];
-    updateTotalAmount();
+    if (!collectorName) {
+        alert("Collector name is required.");
+        return;
+    }
 
-    // Optionally, you could disable the checkboxes or reset them
-    document.querySelectorAll('.bill-checkbox').forEach(checkbox => checkbox.checked = false);
-    document.getElementById('paySelectedBills').disabled = true;
+    const currentDate = new Date().toISOString(); // Get current date and time in ISO format
+
+    // Prepare data for batch update
+    const requests = selectedBills.map(bill => {
+        return {
+            "updateCells": {
+                "range": {
+                    "sheetId": 0, // Change this to your actual sheet ID
+                    "startRowIndex": bill.rowIndex + 1, // Adjust row index for 0-based indexing in Sheets
+                    "startColumnIndex": 9, // Column J (Paid)
+                    "endColumnIndex": 10
+                },
+                "rows": [{
+                    "values": [{
+                        "userEnteredValue": {
+                            "stringValue": "Paid"
+                        }
+                    }]
+                }],
+                "fields": "userEnteredValue"
+            }
+        };
+    });
+
+    const requestBody = { requests };
+
+    // Send the update request to Google Sheets
+    const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetID}:batchUpdate?key=${apiKey}`;
+
+    fetch(updateUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Update successful:', data);
+        alert('Selected bills have been marked as Paid!');
+        // Clear selected bills and disable the button
+        selectedBills = [];
+        document.getElementById("paySelectedBills").disabled = true;
+    })
+    .catch(error => {
+        console.error('Error updating records:', error);
+        alert('Error updating records. Please try again.');
+    });
 }
+
+
+
+
+function trackSelectedBills(checkbox) {
+    const orNumber = checkbox.getAttribute('data-or');
+    if (checkbox.checked) {
+        selectedBills.push(orNumber); // Add OR number to selectedBills array
+    } else {
+        selectedBills = selectedBills.filter(or => or !== orNumber); // Remove OR number from selectedBills array
+    }
+
+    // Enable or disable the 'Pay Selected Bills' button based on whether any bills are selected
+    const payButton = document.getElementById("paySelectedBills");
+    if (selectedBills.length > 0) {
+        payButton.disabled = false; // Enable the button
+    } else {
+        payButton.disabled = true; // Disable the button
+    }
+}
+
 
 
 
